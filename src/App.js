@@ -1,6 +1,6 @@
-// src/App.js - Version dengan styling sederhana
+// src/App.js - Production Version dengan Real OpenAI API
 import React, { useState, useRef, useCallback } from 'react';
-import { Upload, Key, Check, X, Copy, Image, FileText, Loader, AlertTriangle, Trash2 } from 'lucide-react';
+import { Upload, Key, Check, X, Copy, Image, FileText, Loader, Trash2, DollarSign } from 'lucide-react';
 
 const App = () => {
   const [apiKey, setApiKey] = useState('');
@@ -11,11 +11,12 @@ const App = () => {
   const [results, setResults] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [totalCost, setTotalCost] = useState(0);
+  const [totalTokens, setTotalTokens] = useState(0);
   
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
 
-  // Inline styles
+  // Inline styles (same as before)
   const styles = {
     container: {
       minHeight: '100vh',
@@ -44,11 +45,11 @@ const App = () => {
     demoNote: {
       marginTop: '10px',
       padding: '12px 20px',
-      backgroundColor: '#fff3cd',
-      border: '1px solid #ffeaa7',
+      backgroundColor: '#d4edda',
+      border: '1px solid #c3e6cb',
       borderRadius: '8px',
       display: 'inline-block',
-      color: '#856404',
+      color: '#155724',
       fontSize: '0.9rem'
     },
     card: {
@@ -186,66 +187,85 @@ const App = () => {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
       gap: '16px'
+    },
+    costCard: {
+      backgroundColor: '#fff5f5',
+      border: '1px solid #feb2b2',
+      borderRadius: '8px',
+      padding: '16px',
+      marginBottom: '24px'
     }
   };
 
-  // Mock OpenAI API call
-  const mockOpenAICall = async (prompt, base64Image = null) => {
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-    
-    if (prompt.includes('validate')) {
-      if (apiKey.length > 10) {
-        return { valid: true };
-      } else {
-        return { valid: false, error: "API key terlalu pendek" };
-      }
-    }
-    
-    if (prompt.includes('meaningful')) {
-      return {
-        meaningful: Math.random() > 0.3,
-        reason: "Image contains substantial visual content",
-        confidence: 0.8 + Math.random() * 0.2
-      };
-    }
-    
-    if (prompt.includes('Generate')) {
-      const styles = ['photorealistic', 'artistic', 'cartoon', 'cinematic', 'abstract'];
-      const moods = ['dramatic', 'peaceful', 'energetic', 'mysterious', 'bright'];
-      const tags = ['landscape', 'portrait', 'nature', 'urban', 'vintage', 'modern', 'colorful'];
+  // Real OpenAI API calls
+  const callOpenAI = async (messages, maxTokens = 500) => {
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: "gpt-4o", // Latest vision model
+          messages: messages,
+          max_tokens: maxTokens,
+          temperature: 0.7
+        })
+      });
+
+      const data = await response.json();
       
-      return {
-        imagePrompt: `A ${styles[Math.floor(Math.random() * styles.length)]} image featuring detailed composition with ${moods[Math.floor(Math.random() * moods.length)]} lighting, high quality, professional photography style, sharp focus, vibrant colors`,
-        videoPrompt: `Cinematic ${moods[Math.floor(Math.random() * moods.length)]} scene with smooth camera movement, dynamic lighting transitions, ${styles[Math.floor(Math.random() * styles.length)]} style, 4K quality, 30fps`,
-        creativePrompt: `Artistic interpretation with enhanced ${styles[Math.floor(Math.random() * styles.length)]} elements, creative composition, expressive ${moods[Math.floor(Math.random() * moods.length)]} atmosphere, masterpiece quality`,
-        tags: tags.slice(0, 3 + Math.floor(Math.random() * 3)),
-        style: styles[Math.floor(Math.random() * styles.length)],
-        mood: moods[Math.floor(Math.random() * moods.length)]
-      };
+      if (response.ok) {
+        // Update token usage for cost calculation
+        setTotalTokens(prev => prev + (data.usage?.total_tokens || 0));
+        return data.choices[0].message.content;
+      } else {
+        throw new Error(data.error?.message || 'API call failed');
+      }
+    } catch (error) {
+      console.error('OpenAI API Error:', error);
+      throw error;
     }
-    
-    return {};
   };
 
+  // Validate API Key dengan real OpenAI API
   const validateApiKey = async () => {
     if (!apiKey.trim()) {
       setApiKeyValid(false);
+      alert('Silakan masukkan API Key terlebih dahulu');
+      return;
+    }
+
+    if (!apiKey.startsWith('sk-')) {
+      setApiKeyValid(false);
+      alert('API Key harus dimulai dengan "sk-"');
       return;
     }
 
     try {
       setProcessing(true);
-      const result = await mockOpenAICall('validate api key');
-      setApiKeyValid(result.valid);
       
-      if (!result.valid) {
-        alert(`API Key tidak valid: ${result.error}`);
+      // Test API key dengan simple request
+      const response = await fetch('https://api.openai.com/v1/models', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        setApiKeyValid(true);
+        alert('✅ API Key valid! Anda dapat mulai memproses gambar.');
       } else {
-        alert('API Key valid! ✅');
+        const errorData = await response.json();
+        setApiKeyValid(false);
+        alert(`❌ API Key tidak valid: ${errorData.error?.message || 'Unknown error'}`);
       }
     } catch (error) {
       setApiKeyValid(false);
-      alert('Gagal memvalidasi API Key. Pastikan key sudah benar.');
+      alert('❌ Gagal memvalidasi API Key. Periksa koneksi internet Anda.');
     } finally {
       setProcessing(false);
     }
@@ -300,32 +320,83 @@ const App = () => {
     if (file.type.startsWith('image/')) {
       return [file];
     } else if (file.type === 'application/pdf') {
-      alert('PDF processing akan diimplementasikan di versi production. Silakan upload gambar langsung.');
+      alert('PDF processing akan diimplementasikan dalam update berikutnya. Silakan upload gambar langsung untuk saat ini.');
       return [];
     }
     
     return [];
   };
 
+  // Filter meaningful images menggunakan real OpenAI API
   const filterMeaningfulImages = async (images) => {
     const meaningfulImages = [];
     
     for (const image of images) {
       try {
         const base64 = await fileToBase64(image);
-        const result = await mockOpenAICall('check meaningful image', base64);
         
-        if (result.meaningful && result.confidence > 0.7) {
+        const messages = [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Analyze this image and determine if it contains meaningful visual content or is just a simple icon/thumbnail.
+
+Consider MEANINGFUL:
+- Photographs of people, places, objects, scenes
+- Artwork, illustrations, drawings, paintings  
+- Screenshots with substantial content
+- Charts, graphs, diagrams with data
+- Complex designs or compositions
+
+Consider NOT meaningful (skip these):
+- Simple icons or logos
+- Small thumbnails or previews
+- Basic geometric shapes
+- UI elements like buttons
+- Low resolution or pixelated images
+
+Respond ONLY with valid JSON:
+{
+  "meaningful": true/false,
+  "reason": "brief explanation why",
+  "confidence": 0.0-1.0,
+  "imageType": "photo/artwork/screenshot/icon/etc"
+}`
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: base64
+                }
+              }
+            ]
+          }
+        ];
+
+        const response = await callOpenAI(messages);
+        const result = JSON.parse(response);
+        
+        if (result.meaningful && result.confidence > 0.6) {
           meaningfulImages.push({
             file: image,
             analysis: result
           });
+        } else {
+          console.log(`Skipping image (${result.reason}):`, image.name);
         }
       } catch (error) {
         console.error('Error filtering image:', error);
+        // Jika ada error, masukkan gambar (better safe than sorry)
         meaningfulImages.push({
           file: image,
-          analysis: { meaningful: true, reason: 'Analysis failed, included by default', confidence: 0.5 }
+          analysis: { 
+            meaningful: true, 
+            reason: 'Analysis failed, included by default', 
+            confidence: 0.5,
+            imageType: 'unknown'
+          }
         });
       }
     }
@@ -333,20 +404,72 @@ const App = () => {
     return meaningfulImages;
   };
 
+  // Generate AI prompts menggunakan real OpenAI API
   const generatePrompts = async (meaningfulImages) => {
     const prompts = [];
     
     for (const imageData of meaningfulImages) {
       try {
         const base64 = await fileToBase64(imageData.file);
-        const result = await mockOpenAICall('Generate prompts for image', base64);
+        
+        const messages = [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Analyze this image and create detailed AI prompts for generating similar content.
+
+Generate prompts optimized for different AI platforms:
+
+1. TEXT-TO-IMAGE: Perfect for DALL-E 3, Midjourney, Stable Diffusion
+2. TEXT-TO-VIDEO: Optimized for Runway ML, Pika Labs, Gen-2
+3. CREATIVE ENHANCED: Artistic interpretation for creative exploration
+
+Focus on:
+- Visual style and artistic technique
+- Composition and framing  
+- Lighting, shadows, and mood
+- Color palette and contrast
+- Subject matter and context
+- Camera angle and perspective
+- Textures and materials
+- Atmosphere and emotion
+
+Respond ONLY with valid JSON:
+{
+  "imagePrompt": "detailed text-to-image prompt (50-100 words)",
+  "videoPrompt": "detailed text-to-video prompt with motion (50-100 words)",
+  "creativePrompt": "enhanced artistic interpretation prompt (50-100 words)",
+  "tags": ["relevant", "descriptive", "tags"],
+  "style": "art style description",
+  "mood": "emotional tone/atmosphere",
+  "colors": ["dominant", "color", "palette"],
+  "lighting": "lighting description",
+  "composition": "composition type"
+}`
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: base64
+                }
+              }
+            ]
+          }
+        ];
+
+        const response = await callOpenAI(messages, 800); // More tokens for detailed prompts
+        const result = JSON.parse(response);
         
         prompts.push({
           image: imageData.file,
+          analysis: imageData.analysis,
           ...result
         });
       } catch (error) {
         console.error('Error generating prompts:', error);
+        alert(`Error generating prompts for ${imageData.file.name}: ${error.message}`);
       }
     }
     
@@ -362,6 +485,15 @@ const App = () => {
     });
   };
 
+  // Calculate estimated cost
+  const calculateCost = (imageCount, tokenCount) => {
+    // GPT-4o pricing (approximate)
+    const costPerImage = 0.00765; // per image input
+    const costPerToken = 0.00003; // per output token
+    
+    return (imageCount * costPerImage) + (tokenCount * costPerToken);
+  };
+
   const processFiles = async () => {
     if (!apiKeyValid) {
       alert('Silakan validasi API Key terlebih dahulu');
@@ -373,44 +505,60 @@ const App = () => {
       return;
     }
 
+    const confirmProcess = window.confirm(
+      `Anda akan memproses ${files.length} file. Ini akan menggunakan OpenAI API dan dikenakan biaya pada akun Anda. Lanjutkan?`
+    );
+
+    if (!confirmProcess) return;
+
     setProcessing(true);
     setProgress(0);
     setResults([]);
     setTotalCost(0);
+    setTotalTokens(0);
 
     const totalSteps = files.length * 3;
     let currentStep = 0;
 
     for (const fileItem of files) {
       try {
+        // Step 1: Extract images
         setProgress((currentStep / totalSteps) * 100);
         const images = await extractImages(fileItem);
         currentStep++;
 
         if (images.length === 0) continue;
 
+        // Step 2: Filter meaningful images
         setProgress((currentStep / totalSteps) * 100);
         const meaningfulImages = await filterMeaningfulImages(images);
         currentStep++;
 
+        if (meaningfulImages.length === 0) {
+          alert(`No meaningful images found in ${fileItem.file.name}`);
+          continue;
+        }
+
+        // Step 3: Generate prompts
         setProgress((currentStep / totalSteps) * 100);
         const prompts = await generatePrompts(meaningfulImages);
         currentStep++;
 
-        const estimatedCost = meaningfulImages.length * 0.02;
-        setTotalCost(prev => prev + estimatedCost);
-
         setResults(prev => [...prev, {
           fileName: fileItem.file.name,
           meaningfulImages,
-          prompts,
-          cost: estimatedCost
+          prompts
         }]);
 
       } catch (error) {
         console.error(`Error processing ${fileItem.file.name}:`, error);
+        alert(`Error processing ${fileItem.file.name}: ${error.message}`);
       }
     }
+
+    // Calculate final cost
+    const finalCost = calculateCost(results.reduce((acc, r) => acc + r.prompts.length, 0), totalTokens);
+    setTotalCost(finalCost);
 
     setProgress(100);
     setProcessing(false);
@@ -418,7 +566,7 @@ const App = () => {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text).then(() => {
-      alert('Prompt berhasil disalin ke clipboard! ✅');
+      alert('✅ Prompt berhasil disalin ke clipboard!');
     });
   };
 
@@ -432,9 +580,9 @@ const App = () => {
         {/* Header */}
         <div style={styles.header}>
           <h1 style={styles.title}>PromptSnap Clone</h1>
-          <p style={styles.subtitle}>AI-Powered Image Prompt Generator (Local Demo)</p>
+          <p style={styles.subtitle}>AI-Powered Image Prompt Generator</p>
           <div style={styles.demoNote}>
-            🚀 Versi Demo - Menggunakan mock data untuk testing local
+            🚀 Production Version - Menggunakan Real OpenAI API
           </div>
         </div>
 
@@ -450,7 +598,7 @@ const App = () => {
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Masukkan OpenAI API Key Anda (demo: minimal 10 karakter)..."
+              placeholder="Masukkan OpenAI API Key Anda (sk-...)..."
               style={styles.input}
             />
             <button
@@ -475,6 +623,16 @@ const App = () => {
               </div>
             )}
           </div>
+          
+          {!apiKeyValid && (
+            <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#fef5e7', borderRadius: '8px', fontSize: '0.9rem' }}>
+              💡 <strong>Cara mendapatkan API Key:</strong><br/>
+              1. Kunjungi <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style={{color: '#3182ce'}}>platform.openai.com/api-keys</a><br/>
+              2. Login atau daftar akun OpenAI<br/>
+              3. Klik "Create new secret key"<br/>
+              4. Copy dan paste key di sini
+            </div>
+          )}
         </div>
 
         {/* File Upload Section */}
@@ -484,7 +642,6 @@ const App = () => {
             <span>Upload Files</span>
           </div>
 
-          {/* Drag & Drop Area */}
           <div
             ref={dropRef}
             onDragEnter={handleDrag}
@@ -517,7 +674,6 @@ const App = () => {
             />
           </div>
 
-          {/* File List */}
           {files.length > 0 && (
             <div style={styles.fileList}>
               <h3 style={{ fontWeight: '600', marginBottom: '12px' }}>File yang akan diproses:</h3>
@@ -552,7 +708,6 @@ const App = () => {
             </div>
           )}
 
-          {/* Process Button */}
           <div style={{ marginTop: '24px', textAlign: 'center' }}>
             <button
               onClick={processFiles}
@@ -574,13 +729,12 @@ const App = () => {
               ) : (
                 <>
                   <Image size={20} />
-                  Proses File
+                  Proses File dengan AI
                 </>
               )}
             </button>
           </div>
 
-          {/* Progress Bar */}
           {processing && (
             <div style={{ marginTop: '16px' }}>
               <div style={styles.progressBar}>
@@ -592,26 +746,27 @@ const App = () => {
                 ></div>
               </div>
               <p style={{ textAlign: 'center', fontSize: '0.9rem', color: '#4a5568', marginTop: '8px' }}>
-                Progress: {Math.round(progress)}%
+                Progress: {Math.round(progress)}% - Menggunakan OpenAI API...
               </p>
             </div>
           )}
         </div>
 
         {/* Cost Estimation */}
-        {totalCost > 0 && (
-          <div style={{
-            backgroundColor: '#fffbeb',
-            border: '1px solid #fbbf24',
-            borderRadius: '8px',
-            padding: '16px',
-            marginBottom: '24px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={20} color="#d69e2e" />
-              <span style={{ fontWeight: '600', color: '#b45309' }}>
-                Estimasi Biaya: ${totalCost.toFixed(2)}
+        {(totalCost > 0 || totalTokens > 0) && (
+          <div style={styles.costCard}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <DollarSign size={20} color="#e53e3e" />
+              <span style={{ fontWeight: '600', color: '#c53030' }}>
+                Biaya API OpenAI
               </span>
+            </div>
+            <div style={{ fontSize: '0.9rem', color: '#742a2a' }}>
+              <div>Total Tokens: {totalTokens.toLocaleString()}</div>
+              <div>Estimasi Biaya: ${totalCost.toFixed(4)} USD</div>
+              <div style={{ fontSize: '0.8rem', marginTop: '4px', color: '#a0aec0' }}>
+                *Biaya akan dibebankan ke akun OpenAI Anda
+              </div>
             </div>
           </div>
         )}
@@ -620,7 +775,7 @@ const App = () => {
         {results.length > 0 && (
           <div>
             <h2 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#2d3748', marginBottom: '24px' }}>
-              Hasil Analisis
+              Hasil Analisis AI
             </h2>
             
             {results.map((result, index) => (
@@ -635,9 +790,11 @@ const App = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                         <Image size={20} color="#38a169" />
                         <span style={{ fontWeight: '600' }}>Gambar {promptIndex + 1}</span>
+                        <span style={{ fontSize: '0.8rem', color: '#718096', backgroundColor: '#f7fafc', padding: '2px 8px', borderRadius: '12px' }}>
+                          {promptData.analysis.imageType} - {(promptData.analysis.confidence * 100).toFixed(0)}% confidence
+                        </span>
                       </div>
                       
-                      {/* Image Preview */}
                       <div style={{ marginBottom: '16px' }}>
                         <img
                           src={URL.createObjectURL(promptData.image)}
@@ -646,7 +803,6 @@ const App = () => {
                         />
                       </div>
 
-                      {/* Style and Mood */}
                       <div style={styles.grid}>
                         <div>
                           <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '600', color: '#4a5568', marginBottom: '4px' }}>
@@ -666,7 +822,6 @@ const App = () => {
                         </div>
                       </div>
 
-                      {/* Tags */}
                       <div style={{ margin: '16px 0' }}>
                         <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '600', color: '#4a5568', marginBottom: '4px' }}>
                           Tag:
@@ -680,13 +835,11 @@ const App = () => {
                         </div>
                       </div>
 
-                      {/* Prompts */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        {/* Text-to-Image Prompt */}
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                             <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#4a5568' }}>
-                              Text-to-Image Prompt:
+                              🎨 Text-to-Image Prompt:
                             </label>
                             <button
                               onClick={() => copyToClipboard(promptData.imagePrompt)}
@@ -703,16 +856,15 @@ const App = () => {
                           <textarea
                             value={promptData.imagePrompt}
                             readOnly
-                            rows={3}
+                            rows={4}
                             style={styles.textarea}
                           />
                         </div>
 
-                        {/* Text-to-Video Prompt */}
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                             <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#4a5568' }}>
-                              Text-to-Video Prompt:
+                              🎬 Text-to-Video Prompt:
                             </label>
                             <button
                               onClick={() => copyToClipboard(promptData.videoPrompt)}
@@ -730,16 +882,15 @@ const App = () => {
                           <textarea
                             value={promptData.videoPrompt}
                             readOnly
-                            rows={3}
+                            rows={4}
                             style={styles.textarea}
                           />
                         </div>
 
-                        {/* Creative Prompt */}
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                             <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#4a5568' }}>
-                              Enhanced Creative Prompt:
+                              ✨ Enhanced Creative Prompt:
                             </label>
                             <button
                               onClick={() => copyToClipboard(promptData.creativePrompt)}
@@ -757,7 +908,7 @@ const App = () => {
                           <textarea
                             value={promptData.creativePrompt}
                             readOnly
-                            rows={3}
+                            rows={4}
                             style={styles.textarea}
                           />
                         </div>
