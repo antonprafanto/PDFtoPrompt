@@ -1,8 +1,8 @@
 {
-  "name": "promptsnap-clone",
+  "name": "pdftoprompt",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://antonprafanto.github.io/pdftoprompt",
+  "homepage": "https://antonprafanto.github.io/PDFtoPrompt",
   "dependencies": {
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
