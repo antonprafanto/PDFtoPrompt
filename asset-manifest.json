@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/pdftoprompt/static/css/main.e6c13ad2.css",
-    "main.js": "/pdftoprompt/static/js/main.46ef7a20.js",
-    "static/js/453.9b9298ef.chunk.js": "/pdftoprompt/static/js/453.9b9298ef.chunk.js",
-    "index.html": "/pdftoprompt/index.html",
-    "main.e6c13ad2.css.map": "/pdftoprompt/static/css/main.e6c13ad2.css.map",
-    "main.46ef7a20.js.map": "/pdftoprompt/static/js/main.46ef7a20.js.map",
-    "453.9b9298ef.chunk.js.map": "/pdftoprompt/static/js/453.9b9298ef.chunk.js.map"
+    "main.css": "/PDFtoPrompt/static/css/main.e6c13ad2.css",
+    "main.js": "/PDFtoPrompt/static/js/main.6dca32b3.js",
+    "static/js/453.5476effc.chunk.js": "/PDFtoPrompt/static/js/453.5476effc.chunk.js",
+    "index.html": "/PDFtoPrompt/index.html",
+    "main.e6c13ad2.css.map": "/PDFtoPrompt/static/css/main.e6c13ad2.css.map",
+    "main.6dca32b3.js.map": "/PDFtoPrompt/static/js/main.6dca32b3.js.map",
+    "453.5476effc.chunk.js.map": "/PDFtoPrompt/static/js/453.5476effc.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.e6c13ad2.css",
-    "static/js/main.46ef7a20.js"
+    "static/js/main.6dca32b3.js"
   ]
 }
